@@ -199,6 +199,20 @@ private[spark] class TaskSchedulerImpl(
     new TaskSetManager(this, taskSet, maxTaskFailures)
   }
 
+  def killAttemptTasks(stageId: Int, interruptThread: Boolean): Unit = synchronized {
+    logInfo(s"Killing running tasks due to completion of stage ${stageId}")
+
+    taskSetsByStageIdAndAttempt.get(stageId).foreach { attempts =>
+      attempts.foreach { case (_, tsm) =>
+        tsm.runningTasksSet.foreach { tid =>
+          val execId = taskIdToExecutorId(tid)
+          backend.killTask(tid, execId, interruptThread)
+        }
+        logInfo("Attempt tasks [%s] was killed".format(tsm.runningTasksSet.mkString(",")))
+      }
+    }
+  }
+
   override def cancelTasks(stageId: Int, interruptThread: Boolean): Unit = synchronized {
     logInfo("Cancelling stage " + stageId)
     taskSetsByStageIdAndAttempt.get(stageId).foreach { attempts =>
